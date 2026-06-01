@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "build:cf": "vite build && cp dist/server/index.mjs dist/server/_worker.js",
+    "build:cf": "vite build && cp dist/server/index.mjs dist/server/_worker.js && node -e \"const fs=require('fs');const p='dist/server/wrangler.json';const w=JSON.parse(fs.readFileSync(p,'utf8'));w.compatibility_flags=['nodejs_compat'];fs.writeFileSync(p,JSON.stringify(w,null,2));console.log('patched wrangler.json with nodejs_compat');\"",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
