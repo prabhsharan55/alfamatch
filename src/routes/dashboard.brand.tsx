@@ -24,6 +24,7 @@ const searchSchema = z.object({ tab: z.string().optional() });
 export const Route = createFileRoute("/dashboard/brand")({
   validateSearch: searchSchema,
   beforeLoad: async () => {
+    if (typeof window === "undefined") return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw redirect({ to: "/auth/login", search: { redirect: "/dashboard/brand" } });
     // No brand profile yet → send to onboarding
@@ -166,10 +167,16 @@ function BrandDashboard() {
     recentActivity: ActivityRow[];
   };
   const brandName = brand?.company_name ?? "Your Brand";
-  const { session, signOut } = useAuth();
+  const { session, loading, signOut } = useAuth();
   const navigate  = useNavigate();
   const router    = useRouter();
   const { tab }   = useSearch({ from: "/dashboard/brand" });
+
+  useEffect(() => {
+    if (loading) return;
+    if (!session) { navigate({ to: "/auth/login" }); return; }
+    if (!brand) router.invalidate();
+  }, [loading, session, brand, navigate, router]);
 
 
   const [campaignOpen,  setCampaignOpen]  = useState(false);

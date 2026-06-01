@@ -19,6 +19,7 @@ type EscrowPayment = {
 
 export const Route = createFileRoute("/inbox")({
   beforeLoad: async () => {
+    if (typeof window === "undefined") return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw redirect({ to: "/auth/login", search: { redirect: "/inbox" } });
   },

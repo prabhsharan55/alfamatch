@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/auth";
 
 export const Route = createFileRoute("/auth/choose-role")({
   beforeLoad: async () => {
+    if (typeof window === "undefined") return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw redirect({ to: "/auth/login" });
   },

@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/auth";
 
 export const Route = createFileRoute("/onboarding/brand")({
   beforeLoad: async () => {
+    if (typeof window === "undefined") return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw redirect({ to: "/auth/login" });
     // Already has a brand profile → skip to dashboard

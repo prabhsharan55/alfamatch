@@ -1,5 +1,5 @@
-import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link, redirect, useNavigate, useRouter } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import {
   LayoutDashboard, User, Share2, IndianRupee,
@@ -21,12 +21,13 @@ const searchSchema = z.object({ tab: z.string().optional() });
 export const Route = createFileRoute("/dashboard/creator")({
   validateSearch: searchSchema,
   beforeLoad: async () => {
+    if (typeof window === "undefined") return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw redirect({ to: "/auth/login", search: { redirect: "/dashboard/creator" } });
   },
   loader: async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw redirect({ to: "/auth/login" });
+    if (!session) return { profile: null, hasBrand: false };
 
     const [profileResult, profiles] = await Promise.all([
       supabase
@@ -90,8 +91,17 @@ const nav: NavItem[] = [
 function CreatorDashboard() {
   const { profile, hasBrand } = Route.useLoaderData() as { profile: Profile | null; hasBrand: boolean };
   const { tab = "" } = Route.useSearch();
-  const { session, signOut } = useAuth();
+  const { session, loading, signOut } = useAuth();
   const navigate = useNavigate();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+    if (!session) { navigate({ to: "/auth/login" }); return; }
+    if (!profile) router.invalidate(); // SSR rendered with no session — re-run loader now that client has session
+  }, [loading, session, profile, navigate, router]);
+
+  if (loading || !profile) return null;
 
   async function handleSignOut() {
     await signOut();

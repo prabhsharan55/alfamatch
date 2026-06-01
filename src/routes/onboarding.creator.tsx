@@ -8,6 +8,7 @@ import { LocationPicker } from "@/components/location-picker";
 
 export const Route = createFileRoute("/onboarding/creator")({
   beforeLoad: async () => {
+    if (typeof window === "undefined") return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw redirect({ to: "/auth/login" });
     // If they already have a profile, skip to dashboard
