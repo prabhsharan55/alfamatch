@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { BRAND } from "@/lib/brand";
+import type { Session } from "@supabase/supabase-js";
 import type { UserRole } from "@/lib/database.types";
 import { getPostAuthRedirect, getUserProfiles } from "@/lib/auth-helpers";
 
@@ -9,7 +10,6 @@ export const Route = createFileRoute("/auth/callback")({
   component: AuthCallback,
 });
 
-// Key used to pass the chosen role across the OAuth redirect
 const ROLE_KEY = "alfamatch_signup_role";
 
 export function storeSignupRole(role: UserRole) {
@@ -20,35 +20,27 @@ function AuthCallback() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    async function finish() {
-      // PKCE: exchange the ?code= param Supabase/Google puts in the URL
-      const code = new URLSearchParams(window.location.search).get("code");
-      if (code) {
-        await supabase.auth.exchangeCodeForSession(code);
-      }
+    let done = false;
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { navigate({ to: "/auth/login" }); return; }
+    async function handleSession(session: Session) {
+      if (done) return;
+      done = true;
 
       const pendingRole = localStorage.getItem(ROLE_KEY) as UserRole | null;
       localStorage.removeItem(ROLE_KEY);
 
       if (pendingRole) {
-        // User explicitly chose a role (new signup or adding a second profile).
-        // Always honour it — switch the active role and route to onboarding or dashboard.
         await supabase.from("profiles").update({ role: pendingRole }).eq("id", session.user.id);
         const dest = await getPostAuthRedirect(session.user.id, pendingRole);
         navigate({ to: dest });
         return;
       }
 
-      // Plain login (no role chosen).
       const [profileResult, { hasCreator, hasBrand }] = await Promise.all([
         supabase.from("profiles").select("role").eq("id", session.user.id).single(),
         getUserProfiles(session.user.id),
       ]);
 
-      // Dual-role user — let them pick which dashboard to enter.
       if (hasCreator && hasBrand) {
         navigate({ to: "/auth/choose-role" });
         return;
@@ -60,7 +52,27 @@ function AuthCallback() {
       navigate({ to: dest });
     }
 
-    finish();
+    // Supabase auto-processes the ?code= URL param via detectSessionInUrl.
+    // Listen for the SIGNED_IN event it fires, rather than racing it with a manual exchange.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) handleSession(session);
+    });
+
+    // Also check immediately — session may already be set if user was previously logged in
+    // or if Supabase processed the code synchronously before this effect ran.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) handleSession(session);
+    });
+
+    // Fallback: if nothing resolves in 10s, go to login
+    const timeout = setTimeout(() => {
+      if (!done) { done = true; navigate({ to: "/auth/login" }); }
+    }, 10000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, [navigate]);
 
   return (
